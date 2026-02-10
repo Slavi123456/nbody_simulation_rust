@@ -1,4 +1,4 @@
-use crate::mintTransform::IntoSpaceVec;
+use crate::mint_transform::IntoSpaceVec;
 use crate::space::Space;
 use std::cmp::Ordering;
 
@@ -13,6 +13,7 @@ pub enum Priority {
 #[derive(Debug)]
 pub enum Event<S: Space> {
     ObjectCreation { position: S::Vec },
+    RenderSnapshotCreation(),
 }
 
 #[derive(Debug)]
@@ -54,5 +55,15 @@ where
             position: pos.into_space_vec(),
         },
         priority: Priority::High,
+    }
+}
+
+pub fn render_event_creation<S>() -> PrioritizedEvent<S>
+where
+    S: Space,
+{
+    PrioritizedEvent {
+        event: Event::RenderSnapshotCreation(),
+        priority: Priority::Low,
     }
 }

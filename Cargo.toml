@@ -1,0 +1,8 @@
+[workspace]
+members = [
+    "engine_core",
+    "engine_ggez",
+    "engine_bevy",
+    "sandbox",
+]
+resolver = "2"

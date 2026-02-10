@@ -1,0 +1,8 @@
+[package]
+name = "engine_ggez"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+engine_core = { path = "../engine_core" }
+ggez = "0.9"

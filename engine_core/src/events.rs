@@ -16,53 +16,97 @@ pub enum Event<S: Space> {
     RenderSnapshotCreation(),
 }
 
+impl<S: Space> Clone for Event<S>
+where
+    S::Vec: Clone,
+{
+    fn clone(&self) -> Self {
+        match self {
+            Event::ObjectCreation { position } => Event::ObjectCreation {
+                position: position.clone(),
+            },
+            Event::RenderSnapshotCreation() => Event::RenderSnapshotCreation(),
+        }
+    }
+}
+pub struct EventWithResponse<S: Space> {
+    event: Event<S>,
+    response: std::sync::mpsc::Receiver<EventResult>,
+}
 #[derive(Debug)]
-pub struct PrioritizedEvent<S: Space> {
-    pub event: Event<S>,
-    pub priority: Priority,
+pub enum EngineEvent<S: Space> {
+    Simple {
+        event: Event<S>,
+        priority: Priority,
+    },
+    WithResponse {
+        event: Event<S>,
+        priority: Priority,
+        response_tx: std::sync::mpsc::Sender<EventResult>,
+    },
 }
 
-impl<S: Space> Ord for PrioritizedEvent<S> {
-    fn cmp(&self, other: &Self) -> Ordering {
-        // reverse so High is popped first
-        other.priority.cmp(&self.priority)
+impl<S: Space> EngineEvent<S> {
+    fn priority(&self) -> Priority {
+        match self {
+            EngineEvent::Simple { priority, .. } => *priority,
+            EngineEvent::WithResponse { priority, .. } => *priority,
+        }
+    }
+
+    pub fn event(&self) -> Event<S> {
+        match self {
+            EngineEvent::Simple { event, .. } => event.clone(),
+            EngineEvent::WithResponse { event, .. } => event.clone(),
+        }
     }
 }
 
-impl<S: Space> PartialOrd for PrioritizedEvent<S> {
+impl<S: Space> Ord for EngineEvent<S> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        other.priority().cmp(&self.priority())
+    }
+}
+impl<S: Space> PartialOrd for EngineEvent<S> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
-
-impl<S: Space> PartialEq for PrioritizedEvent<S> {
+impl<S: Space> PartialEq for EngineEvent<S> {
     fn eq(&self, other: &Self) -> bool {
-        self.priority == other.priority
+        self.priority() == other.priority()
     }
 }
+impl<S: Space> Eq for EngineEvent<S> {}
 
-impl<S: Space> Eq for PrioritizedEvent<S> {}
+pub enum EventResult {
+    ObjectCreated { id: usize },
+    Nothing,
+}
 
 ///This could be factory pattern for creation
-
-pub fn object_creation<S, P>(pos: P) -> PrioritizedEvent<S>
+pub fn object_creation<S, P>(
+    pos: P,
+    sender_event_result: std::sync::mpsc::Sender<EventResult>,
+) -> EngineEvent<S>
 where
     S: Space,
     P: IntoSpaceVec<S>,
 {
-    PrioritizedEvent {
+    EngineEvent::WithResponse {
         event: Event::ObjectCreation {
             position: pos.into_space_vec(),
         },
         priority: Priority::High,
+        response_tx: sender_event_result,
     }
 }
 
-pub fn render_event_creation<S>() -> PrioritizedEvent<S>
+pub fn render_event_creation<S>() -> EngineEvent<S>
 where
     S: Space,
 {
-    PrioritizedEvent {
+    EngineEvent::Simple {
         event: Event::RenderSnapshotCreation(),
         priority: Priority::Low,
     }

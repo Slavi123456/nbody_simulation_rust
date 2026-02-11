@@ -1,5 +1,5 @@
 use crate::errors::Error;
-use crate::events::{self, PrioritizedEvent};
+use crate::events::{self, EngineEvent, Event, EventResult};
 use crate::space::Space;
 use crate::world::{World, WorldSnapshot};
 
@@ -8,7 +8,7 @@ use std::sync::mpsc::Receiver;
 
 pub struct Engine<S: Space> {
     // world: World<S>,
-    task_sender: std::sync::mpsc::Sender<PrioritizedEvent<S>>,
+    task_sender: std::sync::mpsc::Sender<EngineEvent<S>>,
     snapshot_sender: std::sync::mpsc::Sender<WorldSnapshot<S>>,
 }
 
@@ -30,7 +30,7 @@ where
         })
     }
 
-    pub fn push_event(&mut self, event: events::PrioritizedEvent<S>)
+    pub fn push_event(&mut self, event: events::EngineEvent<S>)
     where
         S::Vec: std::fmt::Debug,
     {
@@ -41,13 +41,13 @@ where
     }
 
     fn dispatcher_loop(
-        receiver: Receiver<PrioritizedEvent<S>>,
+        receiver: Receiver<EngineEvent<S>>,
         world: &mut World<S>,
         snapshot_sender: std::sync::mpsc::Sender<WorldSnapshot<S>>,
     ) where
         <S as Space>::Vec: Clone,
     {
-        let mut queue: BinaryHeap<events::PrioritizedEvent<S>> = BinaryHeap::new();
+        let mut queue: BinaryHeap<events::EngineEvent<S>> = BinaryHeap::new();
 
         while let Ok(event) = receiver.recv() {
             queue.push(event);
@@ -59,19 +59,44 @@ where
     }
 
     fn dispatcher_event(
-        event: events::PrioritizedEvent<S>,
+        engine_event: events::EngineEvent<S>,
         world: &mut World<S>,
         snapshot_sender: &std::sync::mpsc::Sender<WorldSnapshot<S>>,
     ) where
         <S as Space>::Vec: Clone,
     {
-        match event.event {
-            events::Event::ObjectCreation { position } => {
-                println!("Worked event ObjectCreation with position {:?}", position);
-                world.create_object(position);
+        match engine_event {
+            EngineEvent::Simple { event, .. } => {
+                let _ = Self::handle_event(event, world, snapshot_sender);
             }
-            events::Event::RenderSnapshotCreation() => {
+
+            EngineEvent::WithResponse {
+                event, response_tx, ..
+            } => {
+                let result = Self::handle_event(event, world, snapshot_sender);
+                let _ = response_tx.send(result);
+            }
+        }
+    }
+
+    fn handle_event(
+        event: Event<S>,
+        world: &mut World<S>,
+        snapshot_sender: &std::sync::mpsc::Sender<WorldSnapshot<S>>,
+    ) -> EventResult
+    where
+        S: Space,
+    {
+        match event {
+            Event::ObjectCreation { position } => {
+                println!("Worked event ObjectCreation with position {:?}", position);
+                let id = world.create_object(position);
+                EventResult::ObjectCreated { id }
+            }
+
+            Event::RenderSnapshotCreation() => {
                 snapshot_sender.send(world.render_snapshot()).unwrap();
+                EventResult::Nothing
             }
         }
     }

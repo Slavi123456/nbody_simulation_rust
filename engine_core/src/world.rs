@@ -1,5 +1,7 @@
 use crate::errors::Error;
-use crate::space::Space;
+use crate::events::EventResult;
+use crate::mint_transform::IntoSpaceVec;
+use crate::space::{Space, SpaceVec};
 
 pub struct World<S: Space> {
     objects: Vec<S::Vec>,
@@ -12,9 +14,14 @@ impl<S: Space> World<S> {
         })
     }
 
-    pub fn create_object(&mut self, position: S::Vec) {
+    pub fn create_object(&mut self, position: S::Vec) -> usize {
         println!("Created object on position {:?}", position);
         self.objects.push(position);
+
+        if self.objects.len() < 1 {
+            return 0;
+        }
+        self.objects.len() - 1
     }
 
     // тук по-късно:
@@ -35,4 +42,19 @@ impl<S: Space> World<S> {
 #[derive(Debug)]
 pub struct WorldSnapshot<S: Space> {
     pub objects: Vec<S::Vec>,
+}
+
+impl<S: Space> WorldSnapshot<S> {
+    pub fn is_click_on_object<P>(&self, click_position: P, radius_to_check: f32) -> bool
+    where
+        P: IntoSpaceVec<S>,
+    {
+        let click_pos: S::Vec = click_position.into_space_vec();
+
+        let radius_sq = radius_to_check * radius_to_check;
+
+        self.objects
+            .iter()
+            .any(|obj| obj.distance_squared(click_pos) <= radius_sq)
+    }
 }

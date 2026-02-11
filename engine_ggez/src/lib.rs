@@ -1,4 +1,6 @@
+mod custom_input;
 mod game_class;
+mod render_body;
 
 use crate::game_class::MyGame;
 

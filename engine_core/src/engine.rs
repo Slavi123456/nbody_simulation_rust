@@ -5,6 +5,7 @@ use crate::world::{World, WorldSnapshot};
 
 use std::collections::BinaryHeap;
 use std::sync::mpsc::Receiver;
+use std::time::Instant;
 
 pub struct Engine<S: Space> {
     // world: World<S>,
@@ -20,9 +21,8 @@ where
     pub fn new(snapshot_sender: std::sync::mpsc::Sender<WorldSnapshot<S>>) -> Result<Self, Error> {
         let (sender, receiver) = std::sync::mpsc::channel();
 
-        let mut world = World::<S>::new()?;
         let snap_sender_copy = snapshot_sender.clone();
-        std::thread::spawn(move || Self::dispatcher_loop(receiver, &mut world, snap_sender_copy));
+        std::thread::spawn(move || Self::engine_loop(receiver, snap_sender_copy));
 
         Ok(Engine::<S> {
             task_sender: sender,
@@ -40,23 +40,73 @@ where
         self.task_sender.send(event).unwrap();
     }
 
-    fn dispatcher_loop(
+    pub fn engine_loop(
         receiver: Receiver<EngineEvent<S>>,
-        world: &mut World<S>,
         snapshot_sender: std::sync::mpsc::Sender<WorldSnapshot<S>>,
     ) where
         <S as Space>::Vec: Clone,
     {
+        let mut world = World::<S>::new();
         let mut queue: BinaryHeap<events::EngineEvent<S>> = BinaryHeap::new();
 
-        while let Ok(event) = receiver.recv() {
-            queue.push(event);
+        const FIXED_DT: f32 = 1.0 / 120.0;
+        let mut accumulator = 0.0;
+        let mut last = std::time::Instant::now();
+
+        loop {
+            // measure frame time
+            let now = Instant::now();
+            let frame_dt = (now - last).as_secs_f32();
+            last = now;
+
+            accumulator += frame_dt;
+
+            //Process momentum tasks like Creation Object; ApplyForce etc.
+            while let Ok(event) = receiver.try_recv() {
+                queue.push(event);
+            }
 
             while let Some(event) = queue.pop() {
-                Self::dispatcher_event(event, world, &snapshot_sender);
+                Self::dispatcher_event(event, &mut world, &snapshot_sender);
             }
+
+            // Fixed physics step
+            while accumulator >= FIXED_DT {
+                let snapshot = world.physics_snapshot();
+
+                world.move_objects(&snapshot, FIXED_DT);
+                // println!("Move objects!");
+                // println!("Get physics snapshots!");
+                // println!("Calculate physics!");
+                // println!("Apply physics!");
+
+                accumulator -= FIXED_DT;
+            }
+
+            // Send RenderSnapshot
+            let _ = snapshot_sender.send(world.render_snapshot());
+
+            std::thread::sleep(std::time::Duration::from_millis(1));
         }
     }
+
+    // fn dispatcher_loop(
+    //     receiver: Receiver<EngineEvent<S>>,
+    //     world: &mut World<S>,
+    //     snapshot_sender: std::sync::mpsc::Sender<WorldSnapshot<S>>,
+    // ) where
+    //     <S as Space>::Vec: Clone,
+    // {
+    //     let mut queue: BinaryHeap<events::EngineEvent<S>> = BinaryHeap::new();
+
+    //     while let Ok(event) = receiver.recv() {
+    //         queue.push(event);
+
+    //         while let Some(event) = queue.pop() {
+    //             Self::dispatcher_event(event, world, &snapshot_sender);
+    //         }
+    //     }
+    // }
 
     fn dispatcher_event(
         engine_event: events::EngineEvent<S>,
@@ -88,14 +138,25 @@ where
         S: Space,
     {
         match event {
-            Event::ObjectCreation { position } => {
+            Event::ObjectCreation { position, radius } => {
                 println!("Worked event ObjectCreation with position {:?}", position);
-                let id = world.create_object(position);
+                let id = world.create_object(position, radius);
                 EventResult::ObjectCreated { id }
             }
 
-            Event::RenderSnapshotCreation() => {
-                snapshot_sender.send(world.render_snapshot()).unwrap();
+            // Event::RenderSnapshotCreation() => {
+            //     snapshot_sender.send(world.render_snapshot()).unwrap();
+            //     EventResult::Nothing
+            // }
+            Event::ApplyForce {
+                object_id,
+                velocity,
+            } => {
+                println!(
+                    "Worked event ApplyForce on objecgt {:?} with velocity {:?}",
+                    object_id, velocity
+                );
+                world.apply_force(object_id, velocity);
                 EventResult::Nothing
             }
         }

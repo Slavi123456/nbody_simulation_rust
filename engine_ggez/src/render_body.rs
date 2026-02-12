@@ -17,7 +17,7 @@ impl RenderBody {
             Point2 { x: 0.0, y: 0.0 },
             radius,
             2.0,
-            Color::RED,
+            Color::new(0.51, 0.294, 0.016, 1.0),
         )?;
 
         Ok(RenderBody { sphere, radius })

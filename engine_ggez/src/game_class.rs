@@ -77,13 +77,12 @@
 
 use engine_core::engine::Engine;
 use engine_core::events::EventResult;
-use engine_core::space::Space2D;
+use engine_core::space::{Space2D, SpaceVec};
 use engine_core::world::WorldSnapshot;
-use engine_core::{events, object_creation};
+use engine_core::{apply_force_event_creation, events, object_creation};
 
 use ggez::event::EventHandler;
 use ggez::graphics::{self, Color, DrawParam};
-use ggez::input::keyboard::{self, KeyCode, KeyMods};
 use ggez::{Context, GameResult};
 
 use crate::custom_input;
@@ -98,9 +97,15 @@ pub struct MyGame {
     latest_snapshot: Option<WorldSnapshot<Space2D>>,
     mouse_state: custom_input::MouseState,
     pending_event_resp: Vec<std::sync::mpsc::Receiver<EventResult>>,
+    selected_object: i32,
 }
 
 impl MyGame {
+    const BODY_RADIUS: f32 = 10.0;
+    const MOUSE_DRAG_RESTRICTION: f32 = 50.0;
+    const THROW_POWER_DIVIDER: f32 = 30.0;
+    const BACK_GROUND_COLOR: ggez::graphics::Color =
+        ggez::graphics::Color::new(0.016, 0.231, 0.51, 1.0);
     pub fn new(
         snapshot_rec: std::sync::mpsc::Receiver<WorldSnapshot<Space2D>>,
         engine: Engine<Space2D>,
@@ -113,29 +118,39 @@ impl MyGame {
             spawn_timer: 0.0,
             spawn_interval: 1.0,
             ready_to_spawn: true,
-            body_mesh: RenderBody::new(10.0, ctx)?,
+            body_mesh: RenderBody::new(Self::BODY_RADIUS, ctx)?,
             snapshot_rec: snapshot_rec,
             latest_snapshot: None,
-            mouse_state: custom_input::MouseState::new(),
+            mouse_state: custom_input::MouseState::new()
+                .set_drag_restriction(Self::MOUSE_DRAG_RESTRICTION),
             pending_event_resp: Vec::new(),
+            selected_object: -1,
         })
     }
 
     fn render(&mut self, ctx: &mut Context) -> GameResult {
         while let Ok(snapshot) = self.snapshot_rec.try_recv() {
+            // println!(
+            //     "Lastest snapshot {:?} curr snapshot {:?}",
+            //     self.latest_snapshot, snapshot
+            // );
             self.latest_snapshot = Some(snapshot);
         }
 
         if let Some(snapshot) = &self.latest_snapshot {
             for obj in &snapshot.objects {
                 // println!("Draw object on position {:?}", obj);
+                let position = obj.position();
                 graphics::draw(
                     ctx,
                     &self.body_mesh.sphere,
-                    DrawParam::default().dest([obj.x, obj.y]).offset([0.0, 0.0]),
+                    DrawParam::default()
+                        .dest([position.x, position.y])
+                        .offset([0.0, 0.0]),
                 )?;
             }
         }
+
         Ok(())
     }
 
@@ -155,6 +170,7 @@ impl MyGame {
                     match result {
                         events::EventResult::ObjectCreated { id } => {
                             println!("Selected object is with id {:?}", id);
+                            self.selected_object = id as i32;
                         }
                         events::EventResult::Nothing => {}
                     }
@@ -177,8 +193,11 @@ impl MyGame {
                         && !snapshot.is_click_on_object(pos, self.body_mesh.radius())
                     {
                         let (sender, receiver) = std::sync::mpsc::channel();
-                        let new_event =
-                            object_creation::<Space2D, engine_core::mint::Point2<f32>>(pos, sender);
+                        let new_event = object_creation::<Space2D, engine_core::mint::Point2<f32>>(
+                            pos,
+                            Self::BODY_RADIUS,
+                            sender,
+                        );
 
                         println!("Spawn event {:?}", new_event);
                         self.engine.push_event(new_event);
@@ -200,7 +219,20 @@ impl MyGame {
                     start_pos, curr_pos
                 );
             }
-            _ => {}
+        }
+
+        if self.mouse_state.just_released_after_drag() {
+            let drag_distance = self.mouse_state.distance_in_drag();
+            let velocity = drag_distance.normalize() * drag_distance.length();
+            println!(
+                "Throw object with multiplier {:?} and velocity {:?}",
+                drag_distance.length(),
+                velocity
+            );
+            let apply_force_ev =
+                apply_force_event_creation::<Space2D>(self.selected_object as usize, velocity);
+
+            self.engine.push_event(apply_force_ev);
         }
     }
 }
@@ -216,16 +248,24 @@ impl EventHandler for MyGame {
     }
 
     fn draw(&mut self, ctx: &mut Context) -> GameResult {
-        graphics::clear(ctx, Color::WHITE);
+        graphics::clear(ctx, Self::BACK_GROUND_COLOR);
 
-        let render_snap_ev = events::render_event_creation();
-        self.engine.push_event(render_snap_ev);
+        // let render_snap_ev = events::render_event_creation();
+        // self.engine.push_event(render_snap_ev);
 
         if let Err(err) = self.render(ctx) {
             println!("->> Error in drawing {:?}", err);
         }
         // graphics::draw(ctx, &self.rect, DrawParam::default().dest([100.0, 100.0]))?;
-
+        if self.mouse_state.is_restricted() && self.mouse_state.is_draggin() {
+            let line = ggez::graphics::Mesh::new_line(
+                ctx,
+                &[self.mouse_state.start_pos(), self.mouse_state.curr_pos()],
+                3.0,
+                Color::WHITE,
+            )?;
+            graphics::draw(ctx, &line, DrawParam::default())?;
+        }
         graphics::present(ctx)?;
         Ok(())
     }

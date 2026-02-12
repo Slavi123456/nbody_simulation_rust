@@ -12,8 +12,9 @@ pub enum Priority {
 
 #[derive(Debug)]
 pub enum Event<S: Space> {
-    ObjectCreation { position: S::Vec },
-    RenderSnapshotCreation(),
+    ObjectCreation { position: S::Vec, radius: f32 },
+    ApplyForce { object_id: usize, velocity: S::Vec },
+    // RenderSnapshotCreation(),
 }
 
 impl<S: Space> Clone for Event<S>
@@ -22,10 +23,18 @@ where
 {
     fn clone(&self) -> Self {
         match self {
-            Event::ObjectCreation { position } => Event::ObjectCreation {
+            Event::ObjectCreation { position, radius } => Event::ObjectCreation {
                 position: position.clone(),
+                radius: *radius,
             },
-            Event::RenderSnapshotCreation() => Event::RenderSnapshotCreation(),
+            Event::ApplyForce {
+                object_id,
+                velocity,
+            } => Event::ApplyForce {
+                object_id: *object_id,
+                velocity: velocity.clone(),
+            },
+            // Event::RenderSnapshotCreation() => Event::RenderSnapshotCreation(),
         }
     }
 }
@@ -87,6 +96,7 @@ pub enum EventResult {
 ///This could be factory pattern for creation
 pub fn object_creation<S, P>(
     pos: P,
+    radius: f32,
     sender_event_result: std::sync::mpsc::Sender<EventResult>,
 ) -> EngineEvent<S>
 where
@@ -96,18 +106,32 @@ where
     EngineEvent::WithResponse {
         event: Event::ObjectCreation {
             position: pos.into_space_vec(),
+            radius: radius,
         },
         priority: Priority::High,
         response_tx: sender_event_result,
     }
 }
 
-pub fn render_event_creation<S>() -> EngineEvent<S>
+// pub fn render_event_creation<S>() -> EngineEvent<S>
+// where
+//     S: Space,
+// {
+//     EngineEvent::Simple {
+//         event: Event::RenderSnapshotCreation(),
+//         priority: Priority::Low,
+//     }
+// }
+
+pub fn apply_force_event_creation<S>(target_id: usize, velocity: S::Vec) -> EngineEvent<S>
 where
     S: Space,
 {
     EngineEvent::Simple {
-        event: Event::RenderSnapshotCreation(),
-        priority: Priority::Low,
+        event: Event::ApplyForce {
+            object_id: target_id,
+            velocity: velocity,
+        },
+        priority: Priority::Medium,
     }
 }

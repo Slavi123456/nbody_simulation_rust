@@ -12,8 +12,15 @@ pub enum Priority {
 
 #[derive(Debug)]
 pub enum Event<S: Space> {
-    ObjectCreation { position: S::Vec, radius: f32 },
-    ApplyForce { object_id: usize, velocity: S::Vec },
+    ObjectCreation {
+        position: S::Vec,
+        radius: f32,
+        mass: f32,
+    },
+    ApplyForce {
+        object_id: usize,
+        velocity: S::Vec,
+    },
     // RenderSnapshotCreation(),
 }
 
@@ -23,9 +30,14 @@ where
 {
     fn clone(&self) -> Self {
         match self {
-            Event::ObjectCreation { position, radius } => Event::ObjectCreation {
+            Event::ObjectCreation {
+                position,
+                radius,
+                mass,
+            } => Event::ObjectCreation {
                 position: position.clone(),
                 radius: *radius,
+                mass: *mass,
             },
             Event::ApplyForce {
                 object_id,
@@ -54,7 +66,29 @@ pub enum EngineEvent<S: Space> {
         response_tx: std::sync::mpsc::Sender<EventResult>,
     },
 }
-
+impl<S: Space> Clone for EngineEvent<S> {
+    fn clone(&self) -> Self {
+        match self {
+            Self::Simple { event, priority } => {
+                return EngineEvent::Simple {
+                    event: event.clone(),
+                    priority: priority.clone(),
+                };
+            }
+            Self::WithResponse {
+                event,
+                priority,
+                response_tx,
+            } => {
+                return EngineEvent::WithResponse {
+                    event: event.clone(),
+                    priority: *priority,
+                    response_tx: response_tx.clone(),
+                };
+            }
+        }
+    }
+}
 impl<S: Space> EngineEvent<S> {
     fn priority(&self) -> Priority {
         match self {
@@ -97,6 +131,7 @@ pub enum EventResult {
 pub fn object_creation<S>(
     pos: mint::Point2<f32>,
     radius: f32,
+    mass: f32,
     sender_event_result: std::sync::mpsc::Sender<EventResult>,
 ) -> EngineEvent<S>
 where
@@ -106,6 +141,7 @@ where
         event: Event::ObjectCreation {
             position: S::Vec::from_point(pos),
             radius: radius,
+            mass: mass,
         },
         priority: Priority::High,
         response_tx: sender_event_result,

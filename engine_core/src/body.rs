@@ -6,15 +6,18 @@ pub struct Body<S: Space> {
     pub position: S::Vec,
     pub velocity: S::Vec,
     pub radius: f32,
+    pub mass: f32,
 }
 
 impl<S: Space> Body<S> {
-    pub fn new(id: usize, radius: f32, position: S::Vec) -> Self {
+    pub const ELASTICITY: f32 = 0.8;
+    pub fn new(id: usize, radius: f32, mass: f32, position: S::Vec) -> Self {
         Body {
             id: id,
             position,
             velocity: S::Vec::new(1.0, 1.0),
             radius,
+            mass,
         }
     }
 
@@ -32,6 +35,7 @@ impl<S: Space> Body<S> {
             position: self.position.clone(),
             velocity: self.velocity.clone(),
             radius: self.radius,
+            mass: self.mass,
         }
     }
 }

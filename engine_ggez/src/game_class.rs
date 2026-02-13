@@ -102,8 +102,9 @@ pub struct MyGame {
 
 impl MyGame {
     const BODY_RADIUS: f32 = 10.0;
+    const BODY_MASS: f32 = 30.0;
     const MOUSE_DRAG_RESTRICTION: f32 = 50.0;
-    // const THROW_POWER_DIVIDER: f32 = 30.0;
+    const THROW_POWER_MULTIPLIER: f32 = 10.0;
     const BACK_GROUND_COLOR: ggez::graphics::Color =
         ggez::graphics::Color::new(0.016, 0.231, 0.51, 1.0);
     pub fn new(
@@ -193,7 +194,12 @@ impl MyGame {
                         && !snapshot.is_click_on_object(pos, self.body_mesh.radius())
                     {
                         let (sender, receiver) = std::sync::mpsc::channel();
-                        let new_event = object_creation::<Space2D>(pos, Self::BODY_RADIUS, sender);
+                        let new_event = object_creation::<Space2D>(
+                            pos,
+                            Self::BODY_RADIUS,
+                            Self::BODY_MASS,
+                            sender,
+                        );
 
                         println!("Spawn event {:?}", new_event);
                         self.engine.push_event(new_event);
@@ -219,7 +225,8 @@ impl MyGame {
 
         if self.mouse_state.just_released_after_drag() {
             let drag_distance = self.mouse_state.distance_in_drag();
-            let velocity = drag_distance.normalize() * drag_distance.length();
+            let velocity =
+                drag_distance.normalize() * drag_distance.length() * Self::THROW_POWER_MULTIPLIER;
             println!(
                 "Throw object with multiplier {:?} and velocity {:?}",
                 drag_distance.length(),

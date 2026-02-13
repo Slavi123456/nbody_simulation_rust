@@ -4,6 +4,7 @@ use crate::space::Space;
 use crate::world::{World, WorldSnapshot};
 
 use std::collections::BinaryHeap;
+
 use std::sync::mpsc::Receiver;
 use std::time::Instant;
 
@@ -39,10 +40,18 @@ where
     where
         S::Vec: std::fmt::Debug,
     {
-        // println!("Event is added {:?}", event);
+        let mut repeat_try_event = 0;
+        while repeat_try_event <= 3 {
+            println!("Event to send {:?}", event);
+            if self.task_sender.send(event.clone()).is_ok() {
+                return;
+            }
+            // println!("Error {:?}", Error::source());
+            repeat_try_event += 1;
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
 
-        //Should i do some error handling
-        self.task_sender.send(event).unwrap();
+        eprintln!("Failed to send event after 3 retries");
     }
 
     pub fn engine_loop(
@@ -73,6 +82,7 @@ where
             }
 
             while let Some(event) = queue.pop() {
+                println!("Event to dispatch {:?}", event);
                 Self::dispatcher_event(event, &mut world, &snapshot_sender);
             }
 
@@ -80,11 +90,12 @@ where
             while accumulator >= FIXED_DT {
                 let snapshot = world.physics_snapshot();
 
+                world.apply_gravity(frame_dt);
                 world.move_objects(&snapshot, FIXED_DT);
-                world.handle_wall_collisions();
-                // println!("Get physics snapshots!");
-                // println!("Calculate physics!");
-                // println!("Apply physics!");
+
+                let collisions = world.handle_collision();
+
+                world.resolve_collisions(collisions);
 
                 accumulator -= FIXED_DT;
             }
@@ -144,9 +155,13 @@ where
         S: Space,
     {
         match event {
-            Event::ObjectCreation { position, radius } => {
+            Event::ObjectCreation {
+                position,
+                radius,
+                mass,
+            } => {
                 println!("Worked event ObjectCreation with position {:?}", position);
-                let id = world.create_object(position, radius);
+                let id = world.create_object(position, radius, mass);
                 EventResult::ObjectCreated { id }
             }
 

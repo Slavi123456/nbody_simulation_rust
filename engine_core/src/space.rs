@@ -21,9 +21,13 @@ pub trait SpaceVec: Copy + Debug {
     fn set_y(&mut self, y: f32);
 
     fn distance_squared(self, other: Self) -> f32;
+    fn vec_length_squared(self) -> f32;
     fn new(x: f32, y: f32) -> Self;
     fn scale(&self, factor: f32) -> Self;
     fn add(&self, other: &Self) -> Self;
+    fn substract(&self, other: &Self) -> Self;
+    fn vec_dot(&self, other: &Self) -> f32;
+    fn vec_normalize(&self) -> Self;
 
     fn from_array(arr: [f32; 2]) -> Self;
     fn from_point(p: mint::Point2<f32>) -> Self;
@@ -47,6 +51,9 @@ impl SpaceVec for glam::Vec2 {
     fn distance_squared(self, other: Self) -> f32 {
         (self - other).length_squared()
     }
+    fn vec_length_squared(self) -> f32 {
+        self.length_squared()
+    }
 
     fn new(x: f32, y: f32) -> Self {
         glam::Vec2 { x, y }
@@ -64,6 +71,19 @@ impl SpaceVec for glam::Vec2 {
             x: self.x + other.x,
             y: self.y + other.y,
         }
+    }
+    fn substract(&self, other: &Self) -> Self {
+        glam::Vec2 {
+            x: self.x - other.x,
+            y: self.y - other.y,
+        }
+    }
+
+    fn vec_dot(&self, other: &Self) -> f32 {
+        self.dot(*other)
+    }
+    fn vec_normalize(&self) -> Self {
+        self.normalize()
     }
 
     fn from_array(arr: [f32; 2]) -> Self {

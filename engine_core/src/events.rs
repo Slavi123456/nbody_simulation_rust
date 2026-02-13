@@ -1,5 +1,5 @@
-use crate::mint_transform::IntoSpaceVec;
 use crate::space::Space;
+use crate::space::SpaceVec;
 use std::cmp::Ordering;
 
 #[repr(u8)]
@@ -94,18 +94,17 @@ pub enum EventResult {
 }
 
 ///This could be factory pattern for creation
-pub fn object_creation<S, P>(
-    pos: P,
+pub fn object_creation<S>(
+    pos: mint::Point2<f32>,
     radius: f32,
     sender_event_result: std::sync::mpsc::Sender<EventResult>,
 ) -> EngineEvent<S>
 where
     S: Space,
-    P: IntoSpaceVec<S>,
 {
     EngineEvent::WithResponse {
         event: Event::ObjectCreation {
-            position: pos.into_space_vec(),
+            position: S::Vec::from_point(pos),
             radius: radius,
         },
         priority: Priority::High,

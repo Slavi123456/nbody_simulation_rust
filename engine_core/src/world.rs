@@ -1,16 +1,17 @@
 use crate::body::{Body, BodySnapshot};
-use crate::errors::Error;
-use crate::mint_transform::IntoSpaceVec;
 use crate::space::{Space, SpaceVec};
 
 pub struct World<S: Space> {
     objects: Vec<Body<S>>,
+    world_dim: S::Vec,
 }
 
 impl<S: Space> World<S> {
-    pub fn new() -> Self {
+    pub fn new(world_dim: [f32; 2]) -> Self
+where {
         Self {
             objects: Vec::new(),
+            world_dim: S::Vec::from_array(world_dim),
         }
     }
 
@@ -31,6 +32,7 @@ impl<S: Space> World<S> {
             .collect();
         World {
             objects: objects_copy,
+            world_dim: self.world_dim.clone(),
         }
     }
     pub fn render_snapshot(&self) -> WorldSnapshot<S>
@@ -60,6 +62,42 @@ impl<S: Space> World<S> {
     pub fn apply_force(&mut self, object_id: usize, new_vel: S::Vec) {
         self.objects[object_id].velocity = self.objects[object_id].velocity.add(&new_vel);
     }
+
+    pub fn handle_wall_collisions(&mut self) {
+        for body in &mut self.objects {
+            let r = body.radius;
+
+            let width = self.world_dim.x();
+            let height = self.world_dim.y();
+
+            let body_pos_x = body.position.x();
+            let body_pos_y = body.position.y();
+
+            // Left wall
+            if body_pos_x - r <= 0.0 {
+                body.position.set_x(r);
+                body.velocity.set_x(body.velocity.scale(-1.0).x());
+            }
+
+            // Right wall
+            if body_pos_x + r >= width {
+                body.position.set_x(width - r);
+                body.velocity.set_x(body.velocity.scale(-1.0).x());
+            }
+
+            // Top wall
+            if body_pos_y - r <= 0.0 {
+                body.position.set_y(r);
+                body.velocity.set_y(body.velocity.scale(-1.0).y());
+            }
+
+            // Bottom wall
+            if body_pos_y + r >= height {
+                body.position.set_y(height - r);
+                body.velocity.set_y(body.velocity.scale(-1.0).y());
+            }
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -68,11 +106,12 @@ pub struct WorldSnapshot<S: Space> {
 }
 
 impl<S: Space> WorldSnapshot<S> {
-    pub fn is_click_on_object<P>(&self, click_position: P, radius_to_check: f32) -> bool
-    where
-        P: IntoSpaceVec<S>,
-    {
-        let click_pos: S::Vec = click_position.into_space_vec();
+    pub fn is_click_on_object(
+        &self,
+        click_position: mint::Point2<f32>,
+        radius_to_check: f32,
+    ) -> bool {
+        let click_pos: S::Vec = S::Vec::from_point(click_position);
 
         let radius_sq = radius_to_check * radius_to_check;
 

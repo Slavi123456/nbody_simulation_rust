@@ -1,4 +1,4 @@
-use crate::space::{self, Space, SpaceVec};
+use crate::space::{Space, SpaceVec};
 
 #[derive(Debug, Clone)]
 pub struct Body<S: Space> {

@@ -77,7 +77,7 @@
 
 use engine_core::engine::Engine;
 use engine_core::events::EventResult;
-use engine_core::space::{Space2D, SpaceVec};
+use engine_core::space::Space2D;
 use engine_core::world::WorldSnapshot;
 use engine_core::{apply_force_event_creation, events, object_creation};
 
@@ -103,7 +103,7 @@ pub struct MyGame {
 impl MyGame {
     const BODY_RADIUS: f32 = 10.0;
     const MOUSE_DRAG_RESTRICTION: f32 = 50.0;
-    const THROW_POWER_DIVIDER: f32 = 30.0;
+    // const THROW_POWER_DIVIDER: f32 = 30.0;
     const BACK_GROUND_COLOR: ggez::graphics::Color =
         ggez::graphics::Color::new(0.016, 0.231, 0.51, 1.0);
     pub fn new(
@@ -176,7 +176,7 @@ impl MyGame {
                     }
                     false
                 }
-                Err(err) => true,
+                Err(_err) => true,
             });
     }
     fn handle_input(&mut self, ctx: &Context, delta_time: f32) {
@@ -193,11 +193,7 @@ impl MyGame {
                         && !snapshot.is_click_on_object(pos, self.body_mesh.radius())
                     {
                         let (sender, receiver) = std::sync::mpsc::channel();
-                        let new_event = object_creation::<Space2D, engine_core::mint::Point2<f32>>(
-                            pos,
-                            Self::BODY_RADIUS,
-                            sender,
-                        );
+                        let new_event = object_creation::<Space2D>(pos, Self::BODY_RADIUS, sender);
 
                         println!("Spawn event {:?}", new_event);
                         self.engine.push_event(new_event);

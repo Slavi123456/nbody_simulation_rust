@@ -12,15 +12,18 @@ use engine_core::engine::Engine;
 use engine_core::space::Space2D;
 
 pub fn run() {
+    const WINDOW_DIMENSIONS: [f32; 2] = [800.0, 800.0];
+
     println!("->>Engine_ggez main run");
     let (snapshot_snd, snapshot_rec) = std::sync::mpsc::channel();
 
-    let engine: Engine<Space2D> = match Engine::<Space2D>::new(snapshot_snd) {
-        Ok(en) => en,
-        Err(_err) => {
-            return;
-        }
-    };
+    let engine: Engine<Space2D> =
+        match Engine::<Space2D>::new(snapshot_snd, WINDOW_DIMENSIONS) {
+            Ok(en) => en,
+            Err(_err) => {
+                return;
+            }
+        };
     println!("->>Successfully builded Engine");
 
     // ggez setup
@@ -31,7 +34,9 @@ pub fn run() {
 
     // Usual ggez start
     let (mut ctx, event_loop) = ContextBuilder::new("my_game", "N-body Sandbox Simulation")
-        .window_mode(conf::WindowMode::default().dimensions(800.0, 800.0))
+        .window_mode(
+            conf::WindowMode::default().dimensions(WINDOW_DIMENSIONS[0], WINDOW_DIMENSIONS[1]),
+        )
         .build()
         .expect("Could not create ggez context!");
 

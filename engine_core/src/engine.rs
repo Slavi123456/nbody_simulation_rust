@@ -18,11 +18,16 @@ where
     S: Space + std::fmt::Debug + 'static,
     <S as Space>::Vec: Send + Clone,
 {
-    pub fn new(snapshot_sender: std::sync::mpsc::Sender<WorldSnapshot<S>>) -> Result<Self, Error> {
+    pub fn new(
+        snapshot_sender: std::sync::mpsc::Sender<WorldSnapshot<S>>,
+        window_dim: [f32; 2],
+    ) -> Result<Self, Error> {
         let (sender, receiver) = std::sync::mpsc::channel();
 
         let snap_sender_copy = snapshot_sender.clone();
-        std::thread::spawn(move || Self::engine_loop(receiver, snap_sender_copy));
+        let mut world = World::<S>::new(window_dim);
+
+        std::thread::spawn(move || Self::engine_loop(receiver, &mut world, snap_sender_copy));
 
         Ok(Engine::<S> {
             task_sender: sender,
@@ -42,11 +47,12 @@ where
 
     pub fn engine_loop(
         receiver: Receiver<EngineEvent<S>>,
+        mut world: &mut World<S>,
         snapshot_sender: std::sync::mpsc::Sender<WorldSnapshot<S>>,
     ) where
         <S as Space>::Vec: Clone,
     {
-        let mut world = World::<S>::new();
+        // let mut world = World::<S>::new();
         let mut queue: BinaryHeap<events::EngineEvent<S>> = BinaryHeap::new();
 
         const FIXED_DT: f32 = 1.0 / 120.0;
@@ -75,7 +81,7 @@ where
                 let snapshot = world.physics_snapshot();
 
                 world.move_objects(&snapshot, FIXED_DT);
-                // println!("Move objects!");
+                world.handle_wall_collisions();
                 // println!("Get physics snapshots!");
                 // println!("Calculate physics!");
                 // println!("Apply physics!");

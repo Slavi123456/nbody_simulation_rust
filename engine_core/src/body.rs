@@ -7,20 +7,26 @@ pub struct Body<S: Space> {
     pub velocity: S::Vec,
     pub radius: f32,
     pub mass: f32,
+    pub damage: f32,
 }
 
 impl<S: Space> Body<S> {
-    pub const ELASTICITY: f32 = 0.8;
+    pub const ELASTICITY: f32 = 0.2;
+    pub const DMG_THRESHOLD: f32 = 3000.0;
     pub fn new(id: usize, radius: f32, mass: f32, position: S::Vec) -> Self {
         Body {
             id: id,
             position,
-            velocity: S::Vec::new(1.0, 1.0),
+            velocity: S::Vec::new(0.0, 0.0),
             radius,
             mass,
+            damage: 0.0,
         }
     }
 
+    pub fn set_damage(&mut self, damage: f32) {
+        self.damage = damage
+    }
     pub fn get_render_snapshot(&self) -> BodySnapshot<S> {
         BodySnapshot {
             id: self.id,
@@ -36,6 +42,7 @@ impl<S: Space> Body<S> {
             velocity: self.velocity.clone(),
             radius: self.radius,
             mass: self.mass,
+            damage: self.damage,
         }
     }
 }

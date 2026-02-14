@@ -154,7 +154,18 @@ impl MyGame {
 
         Ok(())
     }
-
+    fn render_slingshot(&mut self, ctx: &mut Context) -> GameResult {
+        if self.mouse_state.is_restricted() && self.mouse_state.is_draggin() {
+            let line = ggez::graphics::Mesh::new_line(
+                ctx,
+                &[self.mouse_state.start_pos(), self.mouse_state.curr_pos()],
+                3.0,
+                Color::WHITE,
+            )?;
+            graphics::draw(ctx, &line, DrawParam::default())?;
+        }
+        Ok(())
+    }
     fn update_timer(&mut self, delta_time: f32) {
         if !self.ready_to_spawn {
             self.spawn_timer += delta_time;
@@ -257,19 +268,15 @@ impl EventHandler for MyGame {
         // self.engine.push_event(render_snap_ev);
 
         if let Err(err) = self.render(ctx) {
-            println!("->> Error in drawing {:?}", err);
+            println!("->> Error in drawing world {:?}", err);
+        }
+        if let Err(err) = self.render_slingshot(ctx) {
+            println!("->> Error in drawing slingshot {:?}", err);
         }
         // graphics::draw(ctx, &self.rect, DrawParam::default().dest([100.0, 100.0]))?;
-        if self.mouse_state.is_restricted() && self.mouse_state.is_draggin() {
-            let line = ggez::graphics::Mesh::new_line(
-                ctx,
-                &[self.mouse_state.start_pos(), self.mouse_state.curr_pos()],
-                3.0,
-                Color::WHITE,
-            )?;
-            graphics::draw(ctx, &line, DrawParam::default())?;
-        }
+
         graphics::present(ctx)?;
+
         Ok(())
     }
 }

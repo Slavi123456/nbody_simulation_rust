@@ -1,6 +1,5 @@
 #[derive(Debug, Clone)]
 pub struct Space2D;
-
 // struct Space3D;
 
 use std::fmt::Debug;
@@ -14,6 +13,7 @@ impl Space for Space2D {
 }
 
 pub trait SpaceVec: Copy + Debug {
+    fn new(x: f32, y: f32) -> Self;
     fn x(self) -> f32;
     fn y(self) -> f32;
 
@@ -22,7 +22,7 @@ pub trait SpaceVec: Copy + Debug {
 
     fn distance_squared(self, other: Self) -> f32;
     fn vec_length_squared(self) -> f32;
-    fn new(x: f32, y: f32) -> Self;
+    fn vec_length(self) -> f32;
     fn scale(&self, factor: f32) -> Self;
     fn add(&self, other: &Self) -> Self;
     fn substract(&self, other: &Self) -> Self;
@@ -53,6 +53,9 @@ impl SpaceVec for glam::Vec2 {
     }
     fn vec_length_squared(self) -> f32 {
         self.length_squared()
+    }
+    fn vec_length(self) -> f32 {
+        self.length()
     }
 
     fn new(x: f32, y: f32) -> Self {

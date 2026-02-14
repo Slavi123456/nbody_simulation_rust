@@ -11,7 +11,7 @@ use std::time::Instant;
 pub struct Engine<S: Space> {
     // world: World<S>,
     task_sender: std::sync::mpsc::Sender<EngineEvent<S>>,
-    snapshot_sender: std::sync::mpsc::Sender<WorldSnapshot<S>>,
+    _snapshot_sender: std::sync::mpsc::Sender<WorldSnapshot<S>>,
 }
 
 impl<S> Engine<S>
@@ -32,7 +32,7 @@ where
 
         Ok(Engine::<S> {
             task_sender: sender,
-            snapshot_sender: snapshot_sender,
+            _snapshot_sender: snapshot_sender,
         })
     }
 
@@ -88,15 +88,7 @@ where
 
             // Fixed physics step
             while accumulator >= FIXED_DT {
-                let snapshot = world.physics_snapshot();
-
-                world.apply_gravity(frame_dt);
-                world.move_objects(&snapshot, FIXED_DT);
-
-                let collisions = world.handle_collision();
-
-                world.resolve_collisions(collisions);
-
+                world.step(FIXED_DT);
                 accumulator -= FIXED_DT;
             }
 

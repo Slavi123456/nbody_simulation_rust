@@ -1,5 +1,5 @@
 mod body;
-mod collision;
+pub mod collision; //its pub for testing
 pub mod engine;
 pub mod errors;
 pub mod events;

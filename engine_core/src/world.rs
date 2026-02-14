@@ -1,6 +1,4 @@
-use std::ops::Add;
-
-use crate::body::{self, Body, BodySnapshot};
+use crate::body::{Body, BodySnapshot};
 use crate::collision::Collision;
 use crate::space::{Space, SpaceVec};
 
@@ -10,14 +8,43 @@ pub struct World<S: Space> {
 }
 
 impl<S: Space> World<S> {
-    const WORLD_FRICTION: f32 = 1.0;
+    const WORLD_FRICTION: f32 = 0.998;
     const GRAVITAIONAL_PULL: f32 = 10_000.0;
+    const GRAVITAIONAL_SOFTNING: f32 = 0.1;
+    const MIN_DIST_FOR_GRAVITAION: f32 = 10.0;
+    const IMPULSE_MAX: f32 = 800.0;
+    const DAMAGE_ON_BODY_COLLISON: f32 = 1000.0;
+    const DAMAGE_ON_WALL_COLLISION: f32 = 800.0;
+
     pub fn new(world_dim: [f32; 2]) -> Self
 where {
         Self {
             objects: Vec::new(),
             world_dim: S::Vec::from_array(world_dim),
         }
+    }
+    pub fn get_body(&self, id: usize) -> Option<&Body<S>> {
+        if id > self.objects.len() {
+            return None;
+        }
+        Some(&self.objects[id])
+    }
+    pub fn get_body_mut(&mut self, id: usize) -> Option<&mut Body<S>> {
+        if id > self.objects.len() {
+            return None;
+        }
+        Some(&mut self.objects[id])
+    }
+    pub fn step(&mut self, dt: f32) {
+        let snapshot = self.physics_snapshot();
+
+        self.apply_gravity(dt);
+        self.move_objects(&snapshot, dt);
+
+        let collisions = self.handle_collision();
+
+        self.resolve_collisions(collisions);
+        self.destroy_objects();
     }
 
     pub fn create_object(&mut self, position: S::Vec, radius: f32, mass: f32) -> usize {
@@ -28,18 +55,15 @@ where {
 
         id
     }
-
-    pub fn physics_snapshot(&self) -> Self {
-        let objects_copy = self
+    pub fn apply_force(&mut self, object_id: usize, new_vel: S::Vec) {
+        let body = self
             .objects
-            .iter()
-            .map(|f| f.get_physics_snapshot())
-            .collect();
-        World {
-            objects: objects_copy,
-            world_dim: self.world_dim.clone(),
-        }
+            .iter_mut()
+            .find(|body| body.id == object_id)
+            .unwrap();
+        body.velocity = body.velocity.add(&new_vel);
     }
+
     pub fn render_snapshot(&self) -> WorldSnapshot<S>
     where
         <S as Space>::Vec: Clone,
@@ -54,7 +78,7 @@ where {
         }
     }
 
-    pub fn move_objects(&mut self, snapshot: &World<S>, dt: f32) {
+    fn move_objects(&mut self, snapshot: &World<S>, dt: f32) {
         for (body, snapshot_body) in self.objects.iter_mut().zip(snapshot.objects.iter()) {
             // println!(
             //     "Snapshot pos {:?}, Body vel {:?}, dt {:?}",
@@ -64,11 +88,7 @@ where {
             body.velocity = body.velocity.scale(Self::WORLD_FRICTION);
         }
     }
-
-    pub fn apply_force(&mut self, object_id: usize, new_vel: S::Vec) {
-        self.objects[object_id].velocity = self.objects[object_id].velocity.add(&new_vel);
-    }
-    pub fn handle_collision(&mut self) -> Vec<Collision> {
+    fn handle_collision(&mut self) -> Vec<Collision> {
         let mut collisions = Vec::new();
 
         self.handle_body_collisions(&mut collisions);
@@ -76,7 +96,9 @@ where {
 
         collisions
     }
-    fn handle_body_collisions(&mut self, collision: &mut Vec<Collision>) {
+
+    //pub only for the tests
+    pub fn handle_body_collisions(&mut self, collision: &mut Vec<Collision>) {
         for i in 0..self.objects.len() {
             for j in i + 1..self.objects.len() {
                 let body_a = &self.objects[i];
@@ -93,7 +115,8 @@ where {
         }
     }
 
-    fn handle_wall_collisions(&mut self, collision: &mut Vec<Collision>) {
+    //pub only for the tests
+    pub fn handle_wall_collisions(&mut self, collision: &mut Vec<Collision>) {
         for body in &mut self.objects {
             let r = body.radius;
 
@@ -143,7 +166,7 @@ where {
         }
     }
 
-    pub fn apply_gravity(&mut self, dt: f32) {
+    fn apply_gravity(&mut self, dt: f32) {
         for i in 0..self.objects.len() {
             for j in i + 1..self.objects.len() {
                 let (a_slice, b_slice) = self.objects.split_at_mut(j);
@@ -152,8 +175,9 @@ where {
                 let body_b = &mut b_slice[0];
 
                 let distance = body_b.position.substract(&body_a.position);
-                let distance_squared = distance.vec_length_squared();
-                if distance_squared == 0.0 {
+                let distance_squared = distance.vec_length_squared()
+                    + Self::GRAVITAIONAL_SOFTNING * Self::GRAVITAIONAL_SOFTNING;
+                if distance_squared <= Self::MIN_DIST_FOR_GRAVITAION {
                     continue;
                 }
 
@@ -169,14 +193,14 @@ where {
             }
         }
     }
-    pub fn resolve_collisions(&mut self, collisions: Vec<Collision>) {
+    fn resolve_collisions(&mut self, collisions: Vec<Collision>) {
         for collision in collisions {
             match collision {
                 Collision::WithBody {
                     a_body_id,
                     b_body_id,
                 } => {
-                    println!("Body {:?} and {:?} collidided", a_body_id, b_body_id);
+                    // println!("Body {:?} and {:?} collidided", a_body_id, b_body_id);
                     let (a_slice, b_slice) = if a_body_id < b_body_id {
                         self.objects.split_at_mut(b_body_id)
                     } else {
@@ -192,7 +216,7 @@ where {
                     //     .velocity
                     //     .substract(&body_b.velocity.substract(&body_a.velocity.clone()));
 
-                    //Inelastic collision
+                    ////Inelastic collision
                     // let vel_per_mass_a = body_a.velocity.scale(body_a.mass);
                     // let vel_per_mass_b = body_b.velocity.scale(body_b.mass);
                     // let new_vel = (vel_per_mass_a.add(&vel_per_mass_b))
@@ -200,7 +224,7 @@ where {
                     // body_a.velocity = new_vel;
                     // body_b.velocity = new_vel;
 
-                    //Elastic collision
+                    ////Elastic collision
                     // println!("vel_a {:?} vel_b {:?}", body_a.velocity, body_b.velocity);
                     // let vel_per_mass_a = body_a.velocity.scale(2.0 * body_a.mass);
                     // let vel_per_mass_b = body_b.velocity.scale(2.0 * body_b.mass);
@@ -219,32 +243,67 @@ where {
                     // body_a.velocity = new_vel_a;
                     // body_b.velocity = new_vel_b;
 
-                    // With Impulse involved
-                    // let delta = body_b.position.substract(&body_a.position);
-                    // let normal = delta.vec_normalize();
+                    //// With Impulse involved
+                    let delta = body_b.position.substract(&body_a.position);
+                    let normal = delta.vec_normalize();
 
-                    // let relative_velocity = body_b.velocity.substract(&body_a.velocity);
-                    // let velocity_along_normal = relative_velocity.vec_dot(&normal);
+                    let relative_velocity = body_b.velocity.substract(&body_a.velocity);
+                    let velocity_along_normal = relative_velocity.vec_dot(&normal);
 
-                    // if velocity_along_normal > 0.0 {
-                    //     return;
-                    // }
+                    if velocity_along_normal > 0.0 {
+                        return;
+                    }
 
-                    // let mass_a = body_a.mass;
-                    // let mass_b = body_b.mass;
+                    let mass_a = body_a.mass;
+                    let mass_b = body_b.mass;
 
-                    // let impulse = -(1.0 + Body::<S>::ELASTICITY) * velocity_along_normal
-                    //     / (1.0 / mass_a + 1.0 / mass_b);
+                    let impulse_raw = -(1.0 + Body::<S>::ELASTICITY) * velocity_along_normal
+                        / (1.0 / mass_a + 1.0 / mass_b);
+                    let impulse = impulse_raw.clamp(-Self::IMPULSE_MAX, Self::IMPULSE_MAX);
 
-                    // let impulse_a = (impulse / mass_a).max(10.0);
-                    // let impulse_b = (impulse / mass_b).max(10.0);
+                    body_a.velocity = body_a.velocity.add(&normal.scale(impulse / mass_a));
+                    body_b.velocity = body_b.velocity.substract(&normal.scale(impulse / mass_b));
 
-                    // body_a.velocity = body_a.velocity.add(&normal.scale(impulse_a));
-                    // body_b.velocity = body_b.velocity.substract(&normal.scale(impulse_b));
+                    let impulse_strength = impulse_raw.abs();
+                    // println!(
+                    //     "Body a will destroy itself and body b on impulse_clamp{:?} and raw {:?}",
+                    //     impulse_strength, impulse_raw
+                    // );
+
+                    let pos_a = body_a.position;
+                    let pos_b = body_b.position;
+                    let normal_a = normal;
+                    let normal_b = normal.scale(-1.0);
+                    let impulse_strength = impulse_raw.abs();
+                    // body_a.damage += Self::DAMAGE_ON_BODY_COLLISON;
+                    // body_b.damage += Self::DAMAGE_ON_BODY_COLLISON;
+                    println!(
+                        "Dmg on a body ind:{:?}, damage:{:?}",
+                        a_body_id, body_a.damage
+                    );
+
+                    let have_split_a = self.split_body_into_particles(
+                        a_body_id,
+                        pos_a,
+                        normal_a,
+                        impulse_strength,
+                    );
+                    let have_split_b = self.split_body_into_particles(
+                        b_body_id,
+                        pos_b,
+                        normal_b,
+                        impulse_strength,
+                    );
+                    println!("Count objects in world {:?}", self.objects.len());
                 }
                 Collision::WithWall { body_id, wall } => {
-                    let body = &mut self.objects[body_id];
+                    let body = self
+                        .objects
+                        .iter_mut()
+                        .find(|body| body.id == body_id)
+                        .unwrap();
                     let r = body.radius;
+                    body.damage += Self::DAMAGE_ON_WALL_COLLISION;
                     match wall {
                         crate::collision::Wall::Left => {
                             body.position.set_x(r);
@@ -266,6 +325,81 @@ where {
                 }
             }
         }
+    }
+    fn physics_snapshot(&self) -> Self {
+        let objects_copy = self
+            .objects
+            .iter()
+            .map(|f| f.get_physics_snapshot())
+            .collect();
+        World {
+            objects: objects_copy,
+            world_dim: self.world_dim.clone(),
+        }
+    }
+    fn destroy_objects(&mut self) {
+        let mut bodies_to_destroy = Vec::<usize>::new();
+        for (body) in self.objects.iter() {
+            // println!(
+            //     "Snapshot pos {:?}, Body vel {:?}, dt {:?}",
+            //     snapshot_body.position, body.velocity, dt
+            // );
+            if body.damage > Body::<S>::DMG_THRESHOLD {
+                bodies_to_destroy.push(body.id);
+            }
+        }
+        self.objects
+            .retain_mut(|body| !bodies_to_destroy.contains(&body.id));
+    }
+    fn split_body_into_particles(
+        &mut self,
+        body_id: usize,
+        position: S::Vec,
+        normal: S::Vec,
+        impulse_strenght: f32,
+    ) -> bool {
+        let (body_velocity, damage) = {
+            let body = match self.objects.iter().find(|el| el.id == body_id) {
+                Some(b) => b,
+                None => return false,
+            };
+
+            (body.velocity, body.damage)
+        };
+
+        let (count, mass, radius) = if impulse_strenght < 8000.0 {
+            return false;
+        } else if impulse_strenght < 12_000.0 {
+            (2, 20.0, 10.0)
+        } else if impulse_strenght < 16_000.0 {
+            (2, 10.0, 10.0)
+        } else {
+            (2, 5.0, 10.0)
+        };
+
+        for _ in 0..count {
+            let random_dir = self._random_dir_around_normal(normal, 0.6);
+            let speed = body_velocity.vec_length() * 0.5;
+            let particle_velocity = random_dir.scale(speed);
+
+            let particle_id = self.create_object(position, radius, mass);
+            self.objects[particle_id].set_damage(damage);
+
+            println!("Created particle {:?}", particle_id);
+            self.apply_force(particle_id, particle_velocity);
+        }
+
+        true
+    }
+    fn _random_dir_around_normal(&self, normal: S::Vec, spread: f32) -> S::Vec {
+        let angle = rand::random_range(-spread..spread);
+        let cos = angle.cos();
+        let sin = angle.sin();
+
+        S::Vec::new(
+            normal.x() * cos - normal.y() * sin,
+            normal.x() * sin + normal.y() * cos,
+        )
     }
 }
 

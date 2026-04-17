@@ -55,6 +55,9 @@ where {
 
         id
     }
+
+    //THERE IS A PROBLEM WITH NOT UNIQUE ID BECAUSE OF SETTING THEM WITH THE OBJECTS VEC LEN
+
     pub fn apply_force(&mut self, object_id: usize, new_vel: S::Vec) {
         let body = self
             .objects
@@ -264,10 +267,10 @@ where {
                     body_a.velocity = body_a.velocity.add(&normal.scale(impulse / mass_a));
                     body_b.velocity = body_b.velocity.substract(&normal.scale(impulse / mass_b));
 
-                    let impulse_strength = impulse_raw.abs();
+                    // let impulse_strength = impulse_raw.abs();
                     // println!(
-                    //     "Body a will destroy itself and body b on impulse_clamp{:?} and raw {:?}",
-                    //     impulse_strength, impulse_raw
+                    //     "Body a will destroy itself and body b on impulse_clamp{:?}",
+                    //     impulse_strength
                     // );
 
                     let pos_a = body_a.position;
@@ -277,10 +280,10 @@ where {
                     let impulse_strength = impulse_raw.abs();
                     // body_a.damage += Self::DAMAGE_ON_BODY_COLLISON;
                     // body_b.damage += Self::DAMAGE_ON_BODY_COLLISON;
-                    println!(
-                        "Dmg on a body ind:{:?}, damage:{:?}",
-                        a_body_id, body_a.damage
-                    );
+                    // println!(
+                    //     "Dmg on a body ind:{:?}, damage:{:?}",
+                    //     a_body_id, body_a.damage
+                    // );
 
                     let have_split_a = self.split_body_into_particles(
                         a_body_id,
@@ -288,13 +291,13 @@ where {
                         normal_a,
                         impulse_strength,
                     );
-                    let have_split_b = self.split_body_into_particles(
-                        b_body_id,
-                        pos_b,
-                        normal_b,
-                        impulse_strength,
-                    );
-                    println!("Count objects in world {:?}", self.objects.len());
+                    // let have_split_b = self.split_body_into_particles(
+                    //     b_body_id,
+                    //     pos_b,
+                    //     normal_b,
+                    //     impulse_strength,
+                    // );
+                    // // println!("Count objects in world {:?}", self.objects.len());
                 }
                 Collision::WithWall { body_id, wall } => {
                     let body = self
@@ -385,7 +388,7 @@ where {
             let particle_id = self.create_object(position, radius, mass);
             self.objects[particle_id].set_damage(damage);
 
-            println!("Created particle {:?}", particle_id);
+            // println!("Created particle {:?}", particle_id);
             self.apply_force(particle_id, particle_velocity);
         }
 
